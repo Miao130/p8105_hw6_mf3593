@@ -1,0 +1,78 @@
+---
+title: "p8105_hw6_mf3593"
+author: "Miao Fu"
+date: "2023-11-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(modelr)
+```
+
+## Problem 1
+```{r}
+homicide=read.csv("homicide-data.csv",na = c("", "NA", "Unknown"))|>
+  janitor::clean_names()|>
+  mutate(city_state=paste0(city," , ",state),
+         homicide_bin=ifelse(disposition=="Closed by arrest",1,0),
+         victim_age=as.numeric(victim_age))|>
+  filter(!city_state%in%c("Dallas , TX","Phoenix , AZ", "Kansas City , MO", "Tulsa , AL"),
+         victim_race%in%c("White","Black"))|>
+  select(city_state, homicide_bin, victim_age, victim_sex, victim_race)
+
+
+homicide|>
+  filter(city_state==("Baltimore , MD"))|>
+  glm(homicide_bin ~ victim_age+victim_sex+victim_race,data=_,family=binomial())|>
+  broom::tidy()|>
+  mutate(
+    OR=exp(estimate),
+    OR_CI_upper = exp(estimate + 1.96 * std.error),
+    OR_CI_lower = exp(estimate - 1.96 * std.error)) |> 
+  filter(term == "victim_sexMale") |> 
+  select(OR, OR_CI_lower, OR_CI_upper) |>
+  knitr::kable(digits = 3)
+
+homicide|>
+  nest(data=-city_state)|>
+  mutate(
+    model = map(data,\(df) glm(homicide_bin ~ victim_age+victim_sex+victim_race,data=df,family=binomial())),
+    results = map(model, broom::tidy))|>
+  select(-data, -model)|> 
+  unnest(results)|>
+  mutate(
+    OR=exp(estimate),
+    OR_CI_upper = exp(estimate + 1.96 * std.error),
+    OR_CI_lower = exp(estimate - 1.96 * std.error)) |> 
+  filter(term == "victim_sexMale") |> 
+  select(city_state, OR, OR_CI_lower, OR_CI_upper)|>
+  mutate(
+    city_state = fct_reorder(city_state, OR))|>
+  ggplot(aes(x=city_state,y=OR))+
+  geom_point()+
+  geom_errorbar(aes(ymin = OR_CI_lower, ymax = OR_CI_upper)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  
+```
+
+The odds ratio are overall low (0-2) for all cities. It means male victims has a lower chance of having case closed compared to other sex in most cities. New York has the smallest odds ratio. CI are mostly narrow, suggesting the difference in resolution of case between sexes is significant. 
+
+
+## Problem 2
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2022-01-01",
+    date_max = "2022-12-31") |>
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) |>
+  select(name, id, everything())
+```
+
