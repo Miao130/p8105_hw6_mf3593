@@ -63,6 +63,8 @@ The odds ratio are overall low (0-2) for all cities. It means male victims has a
 ## Problem 2
 
 ```{r}
+set.seed(1)
+
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
@@ -93,9 +95,16 @@ log_multiple=boot_straps|>
   select(-strap_sample,-models)|>
   unnest(results)|>
   select(strap_number,term,estimate)|>
-  filter(term%in%c("tmin","prcp"))|>
-  # group_by(strap_number)|>
-  # summarise(log_B1_b2=log(prod(estimate)))
+  filter(term %in% c("tmin","prcp"))|>
+  group_by(strap_number)|>
+  summarise(log_b1_b2=log(prod(estimate)))
+
+log_multiple|>
+  summarise(count=sum(is.na(log_b1_b2)),
+            n=n(),
+            frac=count/n())|>
+  knitr::kable()
+  
  
 R=boot_straps|>
   mutate(
@@ -106,12 +115,8 @@ R=boot_straps|>
   unnest(results)|>
   select(strap_number,r.squared)
 
-# combined=R|>
-#   full_join(log_multiple,by=strap_number)
-# 
-# combined|>
-#   ggplot(aes(x=))
-#   
+combined=R|>
+  full_join(log_multiple,by=strap_number)
 
 
 ```
@@ -159,6 +164,13 @@ I would propose a multiple linear regression model for birth weight.\
 Hypothesis: Child birthweight is affected by babysex, gestational age in weeks, and presence of malformations that could affect weight.
 
 ```{r}
+linear_mod = lm(bwt ~ babysex+gaweeks+malform, data = child_bw)
+child_bw |> 
+  add_predictions(linear_mod) |> 
+  ggplot(aes(x = gaweeks, y = bwt,color=malform)) + 
+  geom_point() +
+  facet_wrap(~babysex,scale="free")+
+  geom_line(aes(y = pred), color = "blue")
 
 ```
 
